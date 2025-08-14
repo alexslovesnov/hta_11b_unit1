@@ -1,102 +1,80 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 
-st.title("Separate Polyline Plotter (Two Columns + Combine)")
+st.title("Landscape + Color Animation")
 
-# --- Функция для парсинга точек ---
 def parse_points(text):
     return [tuple(map(float, p.strip(" ()").split(",")))
             for p in text.split("),") if p.strip()]
 
-# --- Инициализация session_state ---
-if "landscape_fig" not in st.session_state:
-    st.session_state.landscape_fig = None
-if "color_fig" not in st.session_state:
-    st.session_state.color_fig = None
+# Session state
 if "landscape_points" not in st.session_state:
     st.session_state.landscape_points = None
 if "color_points" not in st.session_state:
     st.session_state.color_points = None
-if "combine_fig" not in st.session_state:
-    st.session_state.combine_fig = None
 
-# --- Две колонки ---
-col1, col2 = st.columns(2)
+# --- Input fields ---
+landscape_input = st.text_area(
+    "Landscape (points: (x, y), ...)",
+    "(0, 0), (1, 2), (2, 1), (3, 3)",
+    key="landscape"
+)
 
-# ====== Левая колонка: Landscape ======
-with col1:
-    landscape_input = st.text_area(
-        "Landscape (points in format (x, y), (x, y), ...)",
-        "(0, 0), (1, 2), (2, 1), (3, 3)",
-        key="landscape"
-    )
+color_input = st.text_area(
+    "Color (time, intensity):",
+    "(0, 0.1), (1, 0.5), (2, 0.8), (3, 1.0)",
+    key="color"
+)
 
-    if st.button("Run Landscape"):
-        try:
-            points = parse_points(landscape_input)
-            st.session_state.landscape_points = points
-            fig, ax = plt.subplots()
-            x_vals, y_vals = zip(*points)
-            ax.plot(x_vals, y_vals, marker="o")
-            ax.set_title("Landscape Polyline")
-            st.session_state.landscape_fig = fig
-        except Exception as e:
-            st.error(f"Error: {e}")
+# --- Buttons ---
+if st.button("Run Landscape"):
+    st.session_state.landscape_points = parse_points(landscape_input)
+    st.success("Landscape points saved.")
 
-    if st.session_state.landscape_fig:
-        st.pyplot(st.session_state.landscape_fig)
+if st.button("Run Color"):
+    st.session_state.color_points = parse_points(color_input)
+    st.success("Color points saved.")
 
-# ====== Правая колонка: Color ======
-with col2:
-    color_input = st.text_area(
-        "Color (points in format (x, y), (x, y), ...)",
-        "(0, 1), (1, 1.5), (2, 0.5), (3, 2.5)",
-        key="color"
-    )
-
-    if st.button("Run Color"):
-        try:
-            points = parse_points(color_input)
-            st.session_state.color_points = points
-            fig, ax = plt.subplots()
-            x_vals, y_vals = zip(*points)
-            ax.plot(x_vals, y_vals, marker="o", linestyle="--")
-            ax.set_title("Color Polyline")
-            st.session_state.color_fig = fig
-        except Exception as e:
-            st.error(f"Error: {e}")
-
-    if st.session_state.color_fig:
-        st.pyplot(st.session_state.color_fig)
-
-# ====== Кнопка Combine ======
-st.markdown("---")
-if st.button("Combine"):
+# --- Combine with animation ---
+if st.button("Combine Animation"):
     if st.session_state.landscape_points and st.session_state.color_points:
-        try:
-            # Берём точки Landscape
-            x_vals, y_vals = zip(*st.session_state.landscape_points)
+        landscape = np.array(st.session_state.landscape_points)
+        color_data = np.array(st.session_state.color_points)
 
-            # Берём значения Y из Color как интенсивность
-            _, color_vals = zip(*st.session_state.color_points)
-            color_vals = np.array(color_vals)
+        x_land, y_land = landscape[:, 0], landscape[:, 1]
+        t_color, intensity = color_data[:, 0], color_data[:, 1]
 
-            # Нормируем интенсивности в диапазон [0, 1]
-            norm_colors = (color_vals - color_vals.min()) / (color_vals.max() - color_vals.min())
+        # Normalize intensity between 0 and 1
+        norm_intensity = (intensity - intensity.min()) / (intensity.max() - intensity.min())
 
-            fig, ax = plt.subplots()
-            for i in range(len(x_vals) - 1):
-                ax.plot(x_vals[i:i+2], y_vals[i:i+2],
-                        color=plt.cm.viridis(norm_colors[i]),
-                        linewidth=2)
+        # Animation placeholder
+        placeholder = st.empty()
 
-            ax.set_title("Landscape Colored by Color Intensity")
-            st.session_state.combine_fig = fig
-        except Exception as e:
-            st.error(f"Error: {e}")
+        for i in range(len(t_color)):
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(5, 6))
+
+            # --- Upper plot: Color chart ---
+            ax1.plot(t_color, norm_intensity, marker="o", color="black")
+            ax1.set_title("Color Intensity over Time")
+            ax1.set_xlabel("Time (s)")
+            ax1.set_ylabel("Intensity (0=white, 1=black)")
+            ax1.set_ylim(0, 1)
+
+            # Highlight current time step
+            ax1.scatter(t_color[i], norm_intensity[i], color="red", zorder=5)
+
+            # --- Lower plot: Landscape colored ---
+            color_val = norm_intensity[i]
+            gray_shade = str(1 - color_val)  # 1=white, 0=black
+            ax2.plot(x_land, y_land, marker="o", color=gray_shade, linewidth=2)
+            ax2.set_title(f"Landscape at t={t_color[i]:.1f}s")
+            ax2.set_xlabel("X")
+            ax2.set_ylabel("Y")
+
+            placeholder.pyplot(fig)
+            time.sleep(0.5)
+
     else:
-        st.warning("Сначала постройте оба графика (Landscape и Color).")
-
-if st.session_state.combine_fig:
-    st.pyplot(st.session_state.combine_fig)
+        st.warning("Сначала введите точки для Landscape и Color и нажмите их кнопки.")
