@@ -1,36 +1,53 @@
 import streamlit as st
 import matplotlib.pyplot as plt
-import re
 
-st.title("Polyline Plotter")
+st.title("Separate Polyline Plotter")
 
-# Поле для ввода точек
-coords_text = st.text_input(
-    "Enter coordinates like (1, 2), (3, 4), (5, 6):",
-    "(0, 0), (1, 2), (3, 1), (4, 3)"
+# Хранилище точек между нажатиями кнопок
+if "landscape_points" not in st.session_state:
+    st.session_state.landscape_points = []
+if "color_points" not in st.session_state:
+    st.session_state.color_points = []
+
+# Функция для парсинга точек
+def parse_points(text):
+    return [tuple(map(float, p.strip(" ()").split(",")))
+            for p in text.split("),") if p.strip()]
+
+# ---- Поле для Landscape ----
+landscape_input = st.text_area(
+    "Landscape (points in format (x, y), (x, y), ...)",
+    "(0, 0), (1, 2), (2, 1), (3, 3)"
 )
-
-# Кнопка запуска
-if st.button("Run"):
+if st.button("Run Landscape"):
     try:
-        # Находим все пары чисел в скобках
-        matches = re.findall(r"\(\s*([-+]?\d*\.?\d+)\s*,\s*([-+]?\d*\.?\d+)\s*\)", coords_text)
-        
-        if not matches:
-            st.error("No valid coordinates found. Please use format: (x, y), (x, y)")
-        else:
-            # Преобразуем в списки X и Y
-            x_values = [float(x) for x, _ in matches]
-            y_values = [float(y) for _, y in matches]
-            
-            # Строим график
-            fig, ax = plt.subplots()
-            ax.plot(x_values, y_values, marker="o")
-            ax.set_xlabel("X")
-            ax.set_ylabel("Y")
-            ax.set_title("Polyline")
-            ax.grid(True)
-            
-            st.pyplot(fig)
+        st.session_state.landscape_points = parse_points(landscape_input)
     except Exception as e:
         st.error(f"Error: {e}")
+
+# ---- Поле для Color ----
+color_input = st.text_area(
+    "Color (points in format (x, y), (x, y), ...)",
+    "(0, 1), (1, 1.5), (2, 0.5), (3, 2.5)"
+)
+if st.button("Run Color"):
+    try:
+        st.session_state.color_points = parse_points(color_input)
+    except Exception as e:
+        st.error(f"Error: {e}")
+
+# ---- Построение графика, если есть данные ----
+if st.session_state.landscape_points or st.session_state.color_points:
+    fig, ax = plt.subplots()
+
+    if st.session_state.landscape_points:
+        x_vals, y_vals = zip(*st.session_state.landscape_points)
+        ax.plot(x_vals, y_vals, marker="o", label="Landscape")
+
+    if st.session_state.color_points:
+        x_vals_c, y_vals_c = zip(*st.session_state.color_points)
+        ax.plot(x_vals_c, y_vals_c, marker="o", label="Color", linestyle="--")
+
+    ax.set_title("Polyline Plot")
+    ax.legend()
+    st.pyplot(fig)
